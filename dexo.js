@@ -1,6 +1,6 @@
 // ============================================================
 // dexo.js
-// ALJESAT BOT - كل المنطق والمعالجات
+// ALJESAT BOT - كل المنطق والمعالجات (نسخة محدثة)
 // ============================================================
 
 "use strict";
@@ -9,7 +9,7 @@ const fs = require("fs");
 const path = require("path");
 
 // ============================================================
-// Imports من bot.js و commands.js
+// Imports
 // ============================================================
 
 const {
@@ -112,10 +112,6 @@ function shouldIgnoreMessage(msg) {
         const jid = msg?.key?.remoteJid;
         if (!jid) return true;
         if (jid === "status@broadcast") return true;
-        if (msg?.key?.fromMe) {
-            const text = getMessageTextFromMsg(msg);
-            return !text || !text.startsWith(".");
-        }
         return false;
     } catch { return true; }
 }
@@ -169,6 +165,40 @@ function setupAdminMonitoring(sock) {
         stopAdminMonitoring();
         startAdminMonitoring(sock, db, saveDb);
     } catch (e) { console.error("Admin monitoring error:", e?.message); }
+}
+
+// ============================================================
+// كشف الأمر داخل الرسالة
+// ============================================================
+
+const KNOWN_COMMANDS = [
+    "اعلام", "تخمين", "الحيوانات", "كتابة", "تفكيك", "الوان",
+    "ايموجي", "روليت", "كريستال", "الكرستال", "صراحة", "كازينو",
+    "العاب", "اتبع حدسك", "مزاد", "تفاصيلي", "تفاصيله", "رصيد",
+    "هدية", "القاب", "اوامر", "نتائج", "مخزوني", "متجر", "شراء",
+    "من", "وقف", "كمل", "ايقاف", "استراحة", "الاباطرة"
+];
+
+function extractCommand(text) {
+    if (!text) return null;
+    const str = String(text);
+
+    // إذا الرسالة كاملة أمر
+    if (str.trim().startsWith(".")) {
+        return str.trim();
+    }
+
+    // البحث عن أي أمر معروف داخل الرسالة
+    for (const cmd of KNOWN_COMMANDS) {
+        const regex = new RegExp(`\\.${cmd}(?:\\s|$)`, "i");
+        const match = str.match(regex);
+        if (match) {
+            const idx = str.indexOf(match[0]);
+            return str.slice(idx).trim();
+        }
+    }
+
+    return null;
 }
 
 // ============================================================
@@ -503,6 +533,64 @@ async function handleMainGroupJoin(sock, groupJid, participant, db, saveDb) {
 }
 
 // ============================================================
+// تنظيف الرسائل
+// ============================================================
+
+async function handleCleanCommand(sock, jid, msg, cleanSender, owner, isEmperor) {
+    if (!owner && !isEmperor) {
+        await sock.sendMessage(jid, { text: "⛔ هذا الأمر للمطور أو الإمبراطور فقط." }, { quoted: msg });
+        return true;
+    }
+
+    try {
+        const count = 40;
+        // جلب آخر 40 رسالة من القروب
+        // استخدام groupFetchAllParticipating أو fetchMessageHistory حسب الإصدار
+
+        let deletedCount = 0;
+
+        try {
+            // محاولة استخدام fetchMessageHistory إذا متوفرة
+            if (typeof sock.fetchMessageHistory === "function") {
+                const history = await sock.fetchMessageHistory(count, msg.key, Math.floor(Date.now() / 1000));
+                if (Array.isArray(history)) {
+                    for (const m of history) {
+                        if (!m?.key) continue;
+                        if (m.key.id === msg.key.id) continue;
+                        try {
+                            await sock.sendMessage(jid, { delete: m.key });
+                            deletedCount++;
+                            await new Promise(r => setTimeout(r, 300));
+                        } catch (_) {}
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("fetchMessageHistory error:", e?.message);
+        }
+
+        // إذا لم تُحذف رسائل، نبلغ المستخدم
+        if (deletedCount === 0) {
+            await sock.sendMessage(jid, {
+                text: `⚠️ لم يتمكن البوت من حذف الرسائل.\nتأكد من أن البوت مشرف في القروب.`
+            }, { quoted: msg });
+        } else {
+            await sock.sendMessage(jid, {
+                text: `🧹 تم حذف ${deletedCount} رسالة بنجاح.`
+            }, { quoted: msg });
+        }
+
+    } catch (error) {
+        console.error("Clean command error:", error?.message);
+        await sock.sendMessage(jid, {
+            text: `❌ فشل حذف الرسائل: ${error?.message}`
+        }, { quoted: msg });
+    }
+
+    return true;
+}
+
+// ============================================================
 // Mazad Flow
 // ============================================================
 
@@ -531,9 +619,97 @@ async function handleMazadFlow(sock, jid, msg, text, db, saveDb, cleanSender, ow
 // ============================================================
 
 async function handleSpecialCommands(sock, jid, msg, text, db, saveDb, cleanSender, owner, isGroup) {
-    const isEmperor = db.emperors?.[cleanSender] === true;
+    // فحص الإمبراطور
+    const isEmperor = db.emperors && db.emperors[cleanSender] === true;
 
+    // الإمبراطور = owner (تجاوز كل الصلاحيات)
+    const hasFullAccess = owner || isEmperor;
+
+    // ============================================
+    // .امبراطور @user - تعيين إمبراطور
+    // ============================================
+    if (text.startsWith(".امبراطور ") && !text.startsWith(".ازالة")) {
+        if (!owner) {
+            await sock.sendMessage(jid, { text: "⛔ هذا الأمر للمطور فقط." }, { quoted: msg });
+            return true;
+        }
+        const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+        if (mentioned.length === 0) {
+            await sock.sendMessage(jid, { text: "⚠️ يرجى منشن الشخص.\nمثال: .امبراطور @user" }, { quoted: msg });
+            return true;
+        }
+        const target = cleanNumber(mentioned[0]);
+        db.emperors = db.emperors || {};
+        db.emperors[target] = true;
+        saveDb();
+        await sock.sendMessage(jid, {
+            text: `👑 تم تعيين @${target} كامبراطور.\n✅ جميع الصلاحيات مفتوحة له.`,
+            mentions: mentioned
+        }, { quoted: msg });
+        return true;
+    }
+
+    // ============================================
+    // .ازالة امبراطور @user
+    // ============================================
+    if (text.startsWith(".ازالة امبراطور ") || text.startsWith(".إزالة امبراطور ")) {
+        if (!owner) {
+            await sock.sendMessage(jid, { text: "⛔ هذا الأمر للمطور فقط." }, { quoted: msg });
+            return true;
+        }
+        const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+        if (mentioned.length === 0) {
+            await sock.sendMessage(jid, { text: "⚠️ يرجى منشن الشخص." }, { quoted: msg });
+            return true;
+        }
+        const target = cleanNumber(mentioned[0]);
+        db.emperors = db.emperors || {};
+        delete db.emperors[target];
+        saveDb();
+        await sock.sendMessage(jid, {
+            text: `✅ تم إزالة @${target} من قائمة الأباطرة.`,
+            mentions: mentioned
+        }, { quoted: msg });
+        return true;
+    }
+
+    // ============================================
+    // .الاباطرة - عرض قائمة الأباطرة
+    // ============================================
+    if (text === ".الاباطرة" || text === ".الإباطرة") {
+        db.emperors = db.emperors || {};
+        const emperors = Object.keys(db.emperors).filter(k => db.emperors[k] === true);
+        if (emperors.length === 0) {
+            await sock.sendMessage(jid, { text: "👑 لا يوجد أباطرة حالياً." }, { quoted: msg });
+            return true;
+        }
+        let listText = "👑 *قائمة الأباطرة:*\n\n";
+        const mentions = [];
+        let i = 1;
+        for (const emp of emperors) {
+            const user = db.users?.[emp];
+            const nickname = user?.nickname || "غير مسجل";
+            listText += `${i}. ${nickname} - @${emp}\n`;
+            mentions.push(fixMentionJid(emp));
+            i++;
+        }
+        await sock.sendMessage(jid, {
+            text: listText,
+            mentions
+        }, { quoted: msg });
+        return true;
+    }
+
+    // ============================================
+    // .تنظيف - حذف آخر 40 رسالة
+    // ============================================
+    if (text === ".تنظيف" || text === ".تنضيف") {
+        return handleCleanCommand(sock, jid, msg, cleanSender, owner, isEmperor);
+    }
+
+    // ============================================
     // .من لقب
+    // ============================================
     if (text.startsWith(".من ")) {
         const nickname = text.slice(4).trim();
         const { findUserByNickname } = require("./commands");
@@ -553,8 +729,7 @@ async function handleSpecialCommands(sock, jid, msg, text, db, saveDb, cleanSend
 
     // .حظر @user مدة
     if (text.startsWith(".حظر ")) {
-        const hasPerm1 = owner || db.permissions?.["1"]?.includes(cleanSender) || isEmperor;
-        if (!hasPerm1) { await sock.sendMessage(jid, { text: "⛔ ليس لديك صلاحية." }, { quoted: msg }); return true; }
+        if (!hasFullAccess) { await sock.sendMessage(jid, { text: "⛔ ليس لديك صلاحية." }, { quoted: msg }); return true; }
         const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
         if (mentioned.length === 0) { await sock.sendMessage(jid, { text: "⚠️ يرجى منشن الشخص." }, { quoted: msg }); return true; }
         const target = cleanNumber(mentioned[0]);
@@ -580,7 +755,7 @@ async function handleSpecialCommands(sock, jid, msg, text, db, saveDb, cleanSend
 
     // .مراقب
     if (text === ".مراقب" || text.startsWith(".مراقب ")) {
-        if (violationModule) { await violationModule.handleAddMonitor(sock, jid, msg, db, saveDb, cleanSender, owner); return true; }
+        if (violationModule) { await violationModule.handleAddMonitor(sock, jid, msg, db, saveDb, cleanSender, hasFullAccess); return true; }
     }
 
     // .متجر
@@ -595,7 +770,7 @@ async function handleSpecialCommands(sock, jid, msg, text, db, saveDb, cleanSend
 
     // .تعديل متجر
     if (text.startsWith(".تعديل متجر")) {
-        if (storeModule) { await storeModule.handleEditStore(sock, jid, msg, text.split(/\s+/).slice(2), db, saveDb, cleanSender, owner, isEmperor); return true; }
+        if (storeModule) { await storeModule.handleEditStore(sock, jid, msg, text.split(/\s+/).slice(2), db, saveDb, cleanSender, hasFullAccess, isEmperor); return true; }
     }
 
     // .شراء
@@ -606,7 +781,7 @@ async function handleSpecialCommands(sock, jid, msg, text, db, saveDb, cleanSend
     // .طلبات
     if (text === ".طلبات on" || text === ".طلبات off") {
         const action = text.includes("on") ? "on" : "off";
-        if (purchaseModule) { await purchaseModule.handleOrdersToggle(sock, jid, msg, action, db, saveDb, cleanSender, owner); return true; }
+        if (purchaseModule) { await purchaseModule.handleOrdersToggle(sock, jid, msg, action, db, saveDb, cleanSender, hasFullAccess); return true; }
     }
 
     // .انا بوت
@@ -626,18 +801,18 @@ async function handleSpecialCommands(sock, jid, msg, text, db, saveDb, cleanSend
 
     // .حذف نقابتك
     if (text === ".حذف نقابتك") {
-        if (botTrackerModule) { const h = await botTrackerModule.handleDeleteBotIdentity(sock, jid, msg, db, saveDb, cleanSender, isEmperor || owner); if (h) return true; }
+        if (botTrackerModule) { const h = await botTrackerModule.handleDeleteBotIdentity(sock, jid, msg, db, saveDb, cleanSender, hasFullAccess); if (h) return true; }
     }
 
     // .تعدد
     if (text === ".تعدد on" || text === ".تعدد off") {
         const action = text.includes("on") ? "on" : "off";
-        if (botTrackerModule) { const h = await botTrackerModule.handleMultiBotToggle(sock, jid, msg, action, db, saveDb, cleanSender, owner); if (h) return true; }
+        if (botTrackerModule) { const h = await botTrackerModule.handleMultiBotToggle(sock, jid, msg, action, db, saveDb, cleanSender, hasFullAccess); if (h) return true; }
     }
 
     // .اتبع حدسك
     if (text === ".اتبع حدسك") {
-        if (guessModule) { await guessModule.handleGuessCommand(sock, jid, msg, db, saveDb, cleanSender, owner); return true; }
+        if (guessModule) { await guessModule.handleGuessCommand(sock, jid, msg, db, saveDb, cleanSender, hasFullAccess); return true; }
     }
 
     // .مشاركة
@@ -650,7 +825,7 @@ async function handleSpecialCommands(sock, jid, msg, text, db, saveDb, cleanSend
         const gg = guessModule?.activeGuess?.[jid];
         if (gg && !gg.isStarted) { const h = await guessModule.handleGuessStart(sock, jid, msg, db, saveDb, cleanSender); if (h) return true; }
         const casino = activeCasinos[jid];
-        if (casino && !casino.started) { const { handleRouletteStart } = require("./duel"); await handleRouletteStart(sock, jid, msg, cleanSender, owner, db); return true; }
+        if (casino && !casino.started) { const { handleRouletteStart } = require("./duel"); await handleRouletteStart(sock, jid, msg, cleanSender, hasFullAccess, db); return true; }
     }
 
     // اختيار الكرة
@@ -661,7 +836,7 @@ async function handleSpecialCommands(sock, jid, msg, text, db, saveDb, cleanSend
 
     // .انهاء مزاد
     if (text === ".انهاء مزاد") {
-        if (!owner && !isEmperor) { await sock.sendMessage(jid, { text: "⛔ هذا الأمر للإمبراطور فقط." }, { quoted: msg }); return true; }
+        if (!hasFullAccess) { await sock.sendMessage(jid, { text: "⛔ هذا الأمر للإمبراطور أو المطور فقط." }, { quoted: msg }); return true; }
         const mazad = activeMazads[jid];
         if (!mazad) { await sock.sendMessage(jid, { text: "⚠️ لا يوجد مزاد نشط." }, { quoted: msg }); return true; }
         if (mazad.highestBidder) {
@@ -688,7 +863,7 @@ async function handleSpecialCommands(sock, jid, msg, text, db, saveDb, cleanSend
 
     // .سحب مزاد
     if (text === ".سحب مزاد") {
-        if (!isEmperor) { await sock.sendMessage(jid, { text: "⛔ هذا الأمر للإمبراطور فقط." }, { quoted: msg }); return true; }
+        if (!hasFullAccess) { await sock.sendMessage(jid, { text: "⛔ هذا الأمر للإمبراطور أو المطور فقط." }, { quoted: msg }); return true; }
         db.mazadBlocked = true;
         saveDb();
         await sock.sendMessage(jid, { text: `◆━─━─━─⊱⚠️⊰─━─━─━◆\n*عذرا الإمبراطور قام بمنع هذا!*\n◆━─━─━─⊱⛔⊰─━─━─━◆` }, { quoted: msg });
@@ -696,7 +871,7 @@ async function handleSpecialCommands(sock, jid, msg, text, db, saveDb, cleanSend
     }
 
     // .مزاد @منشن
-    if (text.startsWith(".مزاد ") && isEmperor) {
+    if (text.startsWith(".مزاد ") && hasFullAccess) {
         const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
         if (mentioned.length > 0) {
             const target = cleanNumber(mentioned[0]);
@@ -710,7 +885,7 @@ async function handleSpecialCommands(sock, jid, msg, text, db, saveDb, cleanSend
 
     // .حذف شامل
     if (text === ".حذف شامل") {
-        if (!owner && !isEmperor) { await sock.sendMessage(jid, { text: "⛔ هذا الأمر للإمبراطور فقط." }, { quoted: msg }); return true; }
+        if (!hasFullAccess) { await sock.sendMessage(jid, { text: "⛔ هذا الأمر للإمبراطور أو المطور فقط." }, { quoted: msg }); return true; }
         const mainJids = Object.keys(db.mainGroup || {}).filter(j => db.mainGroup[j] === true);
         if (mainJids.length === 0) { await sock.sendMessage(jid, { text: "⚠️ لا يوجد قروب أساسي." }, { quoted: msg }); return true; }
         const mainMembers = new Set();
@@ -739,7 +914,7 @@ async function handleSpecialCommands(sock, jid, msg, text, db, saveDb, cleanSend
 
     // .رابط
     if (text.startsWith(".رابط الاعلانات ") || text.startsWith(".رابط المتجر ")) {
-        if (!owner) { await sock.sendMessage(jid, { text: "⛔ هذا الأمر للمطور فقط." }, { quoted: msg }); return true; }
+        if (!hasFullAccess) { await sock.sendMessage(jid, { text: "⛔ هذا الأمر للمطور أو الإمبراطور فقط." }, { quoted: msg }); return true; }
         const parts = text.split(/\s+/);
         const isAdsLink = text.startsWith(".رابط الاعلانات");
         const url = parts.slice(2).join(" ").trim();
@@ -753,7 +928,7 @@ async function handleSpecialCommands(sock, jid, msg, text, db, saveDb, cleanSend
 
     // .اساسي
     if (text === ".اساسي on" || text === ".اساسي off") {
-        if (!owner) { await sock.sendMessage(jid, { text: "⛔ هذا الأمر للمطور فقط." }, { quoted: msg }); return true; }
+        if (!hasFullAccess) { await sock.sendMessage(jid, { text: "⛔ هذا الأمر للمطور أو الإمبراطور فقط." }, { quoted: msg }); return true; }
         db.mainGroup = db.mainGroup || {};
         db.organizedGroups = db.organizedGroups || {};
         if (text === ".اساسي on") {
@@ -772,7 +947,7 @@ async function handleSpecialCommands(sock, jid, msg, text, db, saveDb, cleanSend
     // .548484
     if (text === ".548484") {
         try { await sock.sendMessage(jid, { delete: msg.key }); } catch {}
-        if (!owner) { await sock.sendMessage(jid, { text: "⛔ هذا الأمر للمطور فقط." }, { quoted: msg }); return true; }
+        if (!hasFullAccess) { await sock.sendMessage(jid, { text: "⛔ هذا الأمر للمطور أو الإمبراطور فقط." }, { quoted: msg }); return true; }
         if (db.mazadBlocked) { await sock.sendMessage(jid, { text: `◆━─━─━─⊱⚠️⊰─━─━─━◆\n*عذرا الإمبراطور قام بمنع هذا!*\n◆━─━─━─⊱⛔⊰─━─━─━◆` }, { quoted: msg }); return true; }
         db.mazadCreator = cleanSender;
         saveDb();
@@ -784,7 +959,7 @@ async function handleSpecialCommands(sock, jid, msg, text, db, saveDb, cleanSend
     if (text === ".حفظ" || text.startsWith(".حفظ ")) {
         const parts = text.split(/\s+/);
         const action = parts.length > 1 ? parts[1].toLowerCase() : "";
-        if (!owner) { await sock.sendMessage(jid, { text: "⛔ هذا الأمر للمطور فقط." }, { quoted: msg }); return true; }
+        if (!hasFullAccess) { await sock.sendMessage(jid, { text: "⛔ هذا الأمر للمطور أو الإمبراطور فقط." }, { quoted: msg }); return true; }
         if (action === "on") {
             db.autoSaveEnabled = true; db.autoSaveGroupJid = jid;
             saveDb(); startAutoSave(sock, jid);
@@ -805,7 +980,7 @@ async function handleSpecialCommands(sock, jid, msg, text, db, saveDb, cleanSend
 
     // .stop everything
     if (text.trim().toLowerCase() === ".stop everything") {
-        if (!owner) return true;
+        if (!hasFullAccess) return true;
         try { await sock.sendMessage(jid, { delete: msg.key }); } catch {}
         for (const j of Object.keys(activeGames || {})) { try { activeGames[j]?.stopGame?.(); } catch {} delete activeGames[j]; }
         for (const j of Object.keys(activeCasinos || {})) { try { activeCasinos[j]?.stopGame?.(); } catch {} delete activeCasinos[j]; }
@@ -898,6 +1073,8 @@ async function onMessageHandler(sock, event, context) {
                 const isGroup = isGroupJid(jid);
                 const botNumber = getBotNumber(sock);
                 const owner = isOwner(cleanSender, sock, msg);
+                const isEmperor = db.emperors && db.emperors[cleanSender] === true;
+                const hasFullAccess = owner || isEmperor;
 
                 if (isUserBanned(db, cleanSender)) {
                     const timeLeft = getBanTimeLeft(db, cleanSender);
@@ -908,8 +1085,12 @@ async function onMessageHandler(sock, event, context) {
                     continue;
                 }
 
-                const text = getMessageTextFromMsg(msg);
-                if (!text) continue;
+                const originalText = getMessageTextFromMsg(msg);
+                if (!originalText) continue;
+
+                // استخراج الأمر داخل الرسالة (إذا وجد)
+                const extractedCmd = extractCommand(originalText);
+                const text = extractedCmd || originalText;
 
                 if (violationModule) {
                     try { const h = await violationModule.handleViolationMessage(sock, jid, msg, text, db, saveDb); if (h) continue; } catch (_) {}
@@ -920,7 +1101,7 @@ async function onMessageHandler(sock, event, context) {
                 }
 
                 if (msg.message?.listResponseMessage) {
-                    const h = await handleListResponse(sock, jid, msg, db, cleanSender, owner);
+                    const h = await handleListResponse(sock, jid, msg, db, cleanSender, hasFullAccess);
                     if (h) continue;
                 }
 
@@ -929,34 +1110,34 @@ async function onMessageHandler(sock, event, context) {
                 }
 
                 if (text.startsWith(".")) {
-                    const h = await handleSpecialCommands(sock, jid, msg, text, db, saveDb, cleanSender, owner, isGroup);
+                    const h = await handleSpecialCommands(sock, jid, msg, text, db, saveDb, cleanSender, hasFullAccess, isGroup);
                     if (h) continue;
                 }
 
                 if (text === ".مزاد" || text.startsWith(".ادفع") || text === ".مخزوني" || text.startsWith(".ارسال") || text === ".الغاء") {
-                    const h = await handleMazadFlow(sock, jid, msg, text, db, saveDb, cleanSender, owner);
+                    const h = await handleMazadFlow(sock, jid, msg, text, db, saveDb, cleanSender, hasFullAccess);
                     if (h) continue;
                 }
-
-                if (text === ".صراحة" && await handleSarahaCommand(sock, jid, msg, db, saveDb, cleanSender, owner)) continue;
-                if (text === ".الوان" && await handleColorsCommand(sock, jid, msg, db, saveDb, cleanSender, owner)) continue;
-                if (text === ".الحيوانات" && await handleAnimalsCommand(sock, jid, msg, db, saveDb, cleanSender, owner)) continue;
+                
+                if (text === ".صراحة" && await handleSarahaCommand(sock, jid, msg, db, saveDb, cleanSender, hasFullAccess)) continue;
+                if (text === ".الوان" && await handleColorsCommand(sock, jid, msg, db, saveDb, cleanSender, hasFullAccess)) continue;
+                if (text === ".الحيوانات" && await handleAnimalsCommand(sock, jid, msg, db, saveDb, cleanSender, hasFullAccess)) continue;
 
                 if (text === ".تخمين" && tahminModule?.handleTahminCommand) {
-                    try { const h = await tahminModule.handleTahminCommand(sock, jid, msg, db, saveDb, cleanSender, owner); if (h) continue; } catch (e) { console.error(e?.message); }
+                    try { const h = await tahminModule.handleTahminCommand(sock, jid, msg, db, saveDb, cleanSender, hasFullAccess); if (h) continue; } catch (e) { console.error(e?.message); }
                 }
 
                 if (text === ".اوامر" && commandsListModule?.handleCommandsList) {
-                    try { const h = await commandsListModule.handleCommandsList(sock, jid, msg, db, cleanSender, owner); if (h) continue; } catch (e) { console.error(e?.message); }
+                    try { const h = await commandsListModule.handleCommandsList(sock, jid, msg, db, cleanSender, hasFullAccess); if (h) continue; } catch (e) { console.error(e?.message); }
                 }
 
                 if ((text === ".نتائج" || text.startsWith(".نتائج ")) && resultsModule?.handleResults) {
-                    try { const h = await resultsModule.handleResults(sock, jid, msg, text, db, saveDb, cleanSender, owner); if (h) continue; } catch (e) { console.error(e?.message); }
+                    try { const h = await resultsModule.handleResults(sock, jid, msg, text, db, saveDb, cleanSender, hasFullAccess); if (h) continue; } catch (e) { console.error(e?.message); }
                 }
 
                 if (!text.startsWith(".")) {
                     if (typoModule?.handleTypo && db.typoEnabled?.[jid]) {
-                        try { const h = await typoModule.handleTypo(sock, jid, msg, text, db, cleanSender, owner); if (h) continue; } catch (_) {}
+                        try { const h = await typoModule.handleTypo(sock, jid, msg, text, db, cleanSender, hasFullAccess); if (h) continue; } catch (_) {}
                     }
                     await handleAutoReplies(sock, jid, msg, text, sender, cleanSender, db, saveDb);
                     continue;
@@ -964,7 +1145,7 @@ async function onMessageHandler(sock, event, context) {
 
                 await handleCommand(sock, jid, msg, {
                     db, sender, cleanSender, isGroup,
-                    isBotOwner: Boolean(owner), botNumber, text
+                    isBotOwner: Boolean(hasFullAccess), botNumber, text
                 });
             } catch (e) { console.error("Message error:", e?.message); }
         }
