@@ -1,6 +1,6 @@
 // ============================================================
 // dexo.js
-// ALJESAT BOT - كل المنطق والمعالجات (نسخة نهائية)
+// ALJESAT BOT - كل المنطق والمعالجات (النسخة النهائية)
 // ============================================================
 
 "use strict";
@@ -168,35 +168,119 @@ function setupAdminMonitoring(sock) {
 }
 
 // ============================================================
-// كشف الأمر داخل الرسالة (محسّن)
+// 🆕 كشف الأمر داخل أي رسالة
 // ============================================================
 
-const KNOWN_COMMANDS = [
-    "اعلام", "تخمين", "الحيوانات", "كتابة", "تفكيك", "الوان",
-    "ايموجي", "روليت", "كريستال", "الكرستال", "صراحة", "كازينو",
-    "العاب", "اتبع حدسك", "مزاد", "تفاصيلي", "تفاصيله", "رصيد",
-    "هدية", "القاب", "اوامر", "نتائج", "مخزوني", "متجر", "شراء",
-    "وقف", "كمل", "ايقاف", "استراحة", "الاباطرة", "من"
+// قائمة أوامر اللعب (لا تحتاج معامل)
+const GAME_TRIGGER_COMMANDS = [
+    "تفكيك", "كتابة", "اعلام", "ايموجي", "الوان", "الحيوانات",
+    "تخمين", "صراحة", "روليت", "كريستال", "الكرستال", "كازينو",
+    "العاب", "اتبع حدسك"
 ];
 
+// قائمة الأوامر العامة
+const GENERAL_TRIGGER_COMMANDS = [
+    "تفاصيلي", "تفاصيله", "رصيد", "هدية", "القاب", "اوامر",
+    "نتائج", "مخزوني", "متجر", "شراء", "من", "الاباطرة",
+    "وقف", "كمل", "ايقاف", "استراحة", "حسبة", "رتبتي"
+];
+
+const ALL_TRIGGER_COMMANDS = [...GAME_TRIGGER_COMMANDS, ...GENERAL_TRIGGER_COMMANDS];
+
+// أسماء بديلة (بدون نقطة) → الأمر الصحيح
+const NICKNAME_COMMAND_MAP = {
+    "تفاصيل": "تفاصيلي",
+    "تفصيلي": "تفاصيلي",
+    "تفصلي": "تفاصيلي",
+    "تفاصلى": "تفاصيلي",
+    "معلوماتي": "تفاصيلي",
+    "بياناتي": "تفاصيلي",
+    "بروفايلي": "تفاصيلي",
+    "رتبه": "رتبتي",
+    "رتبت": "رتبتي",
+    "منصبي": "رتبتي",
+    "رصيدي": "تفاصيلي",
+    "فلوسي": "تفاصيلي",
+    "الالقاب": "القاب",
+    "لقاب": "القاب",
+    "هديه": "هدية",
+    "جائزة": "هدية",
+    "مخزنى": "مخزوني",
+    "حقيبتي": "مخزوني",
+    "الالعاب": "العاب",
+    "فعاليات": "العاب",
+    "الأعلام": "اعلام",
+    "إيموجي": "ايموجي",
+    "الألوان": "الوان",
+    "لون": "الوان",
+    "حيوانات": "الحيوانات",
+    "التخمين": "تخمين",
+    "خمن": "تخمين",
+    "صراحه": "صراحة",
+    "الصراحة": "صراحة",
+    "الكازينو": "كازينو",
+    "الروليت": "روليت",
+    "الكرستال": "كريستال",
+    "المزاد": "مزاد",
+    "الأوامر": "اوامر",
+    "الاوامر": "اوامر",
+    "النتائج": "نتائج",
+    "المتجر": "متجر",
+    "حدس": "اتبع حدسك",
+    "اتبع": "اتبع حدسك"
+};
+
+/**
+ * ✅ كشف الأمر داخل أي رسالة
+ * يدعم:
+ * - ".امر" (بداية)
+ * - "كلام .امر" (وسط الرسالة)
+ * - "امر" (بدون نقطة، مع تصحيح إملائي)
+ */
 function extractCommand(text) {
     if (!text) return null;
     const str = String(text).trim();
 
-    // إذا الرسالة كاملة أمر (تبدأ بنقطة)
+    // 1) الرسالة كاملة أمر (تبدأ بنقطة)
     if (str.startsWith(".")) {
         return str;
     }
 
-    // البحث عن أي أمر معروف داخل الرسالة
-    for (const cmd of KNOWN_COMMANDS) {
-        const regex = new RegExp(`\\.${cmd}(?:\\s|$|[،,.!؟])`, "i");
+    // 2) البحث عن ".امر" داخل الرسالة
+    for (const cmd of ALL_TRIGGER_COMMANDS) {
+        const regex = new RegExp(`\\.${cmd}(?=\\s|$|[،,.!؟:;\\-]|\\n)`, "i");
         const match = str.match(regex);
         if (match) {
             const idx = str.indexOf(match[0]);
-            const extracted = str.slice(idx).trim();
+            let extracted = str.slice(idx).trim();
+            // نظف الرموز من النهاية
+            extracted = extracted.replace(/[،,.!؟]+$/g, "").trim();
             if (extracted.startsWith(".")) {
                 return extracted;
+            }
+        }
+    }
+
+    // 3) تصحيح الأخطاء الإملائية (بدون نقطة)
+    // بحث عن كلمة واحدة فقط (الرسالة كلها كلمة واحدة)
+    const words = str.split(/\s+/).filter(Boolean);
+    if (words.length === 1) {
+        const word = words[0];
+        const normalizedWord = word.replace(/[أإآ]/g, "ا").replace(/ى/g, "ي").replace(/ة/g, "ه");
+
+        // ابحث في الخريطة
+        for (const [key, correct] of Object.entries(NICKNAME_COMMAND_MAP)) {
+            const normalizedKey = key.replace(/[أإآ]/g, "ا").replace(/ى/g, "ي").replace(/ة/g, "ه");
+            if (normalizedWord === normalizedKey) {
+                return "." + correct;
+            }
+        }
+
+        // ابحث عن تطابق جزئي (بداية الكلمة)
+        for (const [key, correct] of Object.entries(NICKNAME_COMMAND_MAP)) {
+            const normalizedKey = key.replace(/[أإآ]/g, "ا").replace(/ى/g, "ي").replace(/ة/g, "ه");
+            if (normalizedWord.length >= 3 && normalizedKey.startsWith(normalizedWord)) {
+                return "." + correct;
             }
         }
     }
@@ -536,7 +620,7 @@ async function handleMainGroupJoin(sock, groupJid, participant, db, saveDb) {
 }
 
 // ============================================================
-// تنظيف الرسائل
+// 🆕 تنظيف الرسائل (محسّن - يعمل مع sock.store)
 // ============================================================
 
 async function handleCleanCommand(sock, jid, msg, cleanSender, owner, isEmperor) {
@@ -547,60 +631,68 @@ async function handleCleanCommand(sock, jid, msg, cleanSender, owner, isEmperor)
 
     try {
         const count = 40;
-        let deletedCount = 0;
-        let failedCount = 0;
+        let messagesToDelete = [];
 
-        if (typeof sock.fetchMessageHistory === "function") {
+        // 1. من sock.store.messages (الأسرع)
+        try {
+            if (sock.store && sock.store.messages && sock.store.messages[jid]) {
+                const stored = sock.store.messages[jid];
+                if (Array.isArray(stored)) {
+                    messagesToDelete = stored.slice(-count);
+                }
+            }
+        } catch (e) {
+            console.error("store read error:", e?.message);
+        }
+
+        // 2. إذا لم نجد، جرب fetchMessageHistory
+        if (messagesToDelete.length === 0 && typeof sock.fetchMessageHistory === "function") {
             try {
                 const history = await sock.fetchMessageHistory(count, msg.key, Math.floor(Date.now() / 1000));
-                if (Array.isArray(history) && history.length > 0) {
-                    for (const m of history) {
-                        if (!m?.key) continue;
-                        if (m.key.id === msg.key.id) continue;
-                        try {
-                            await sock.sendMessage(jid, { delete: m.key });
-                            deletedCount++;
-                            await new Promise(r => setTimeout(r, 400));
-                        } catch (_) {
-                            failedCount++;
-                        }
-                    }
+                if (Array.isArray(history)) {
+                    messagesToDelete = history;
                 }
             } catch (e) {
                 console.error("fetchMessageHistory error:", e?.message);
             }
         }
 
-        if (deletedCount === 0) {
-            try {
-                const store = sock.store;
-                if (store && store.messages && store.messages[jid]) {
-                    const messagesObj = store.messages[jid].array || [];
-                    const recent = messagesObj.slice(-count);
-                    for (const m of recent) {
-                        if (!m?.key) continue;
-                        if (m.key.id === msg.key.id) continue;
-                        try {
-                            await sock.sendMessage(jid, { delete: m.key });
-                            deletedCount++;
-                            await new Promise(r => setTimeout(r, 400));
-                        } catch (_) {
-                            failedCount++;
-                        }
-                    }
-                }
-            } catch (e) {
-                console.error("store.messages error:", e?.message);
-            }
+        // 3. إذا لم نجد شي
+        if (messagesToDelete.length === 0) {
+            await sock.sendMessage(jid, {
+                text: `⚠️ لم يتمكن البوت من الوصول للرسائل المخزنة.\n\n*السبب:*\nقاعدة الرسائل المؤقتة فارغة.\n\n*الحل:*\nانتظر قليلاً حتى تتراكم الرسائل ثم جرب مجدداً.`
+            }, { quoted: msg });
+            return true;
         }
 
-        if (deletedCount === 0) {
+        // حذف الرسائل
+        let deletedCount = 0;
+        for (const m of messagesToDelete) {
+            if (!m?.key) continue;
+            if (m.key.id === msg.key.id) continue;
+            if (m.key.fromMe === undefined) continue;
+            try {
+                await sock.sendMessage(jid, { delete: m.key });
+                deletedCount++;
+                await new Promise(r => setTimeout(r, 350));
+            } catch (_) {}
+        }
+
+        // احذف من store أيضاً
+        try {
+            if (sock.store && sock.store.messages && sock.store.messages[jid]) {
+                const idsToRemove = new Set(messagesToDelete.map(m => m?.key?.id).filter(Boolean));
+                sock.store.messages[jid] = sock.store.messages[jid].filter(m => !idsToRemove.has(m?.key?.id));
+            }
+        } catch (_) {}
+
+        if (deletedCount > 0) {
             await sock.sendMessage(jid, {
-                text: `⚠️ لم يتمكن البوت من حذف الرسائل.\nتأكد من:\n1. البوت مشرف في القروب\n2. الرسائل ليست قديمة جداً (أكثر من ساعة)\n3. القروب ليس مقفلاً`
+                text: `🧹 تم حذف ${deletedCount} رسالة بنجاح.`
             }, { quoted: msg });
         } else {
             await sock.sendMessage(jid, {
-                text: `🧹 تم حذف ${deletedCount} رسالة بنجاح.${failedCount > 0 ? `\n⚠️ فشل حذف ${failedCount}` : ''}`
+                text: `⚠️ لم يتم حذف أي رسالة.\nقد تكون الرسائل قديمة جداً أو تم حذفها مسبقاً.`
             }, { quoted: msg });
         }
 
@@ -663,12 +755,12 @@ async function handleSpecialCommands(sock, jid, msg, text, db, saveDb, cleanSend
         saveDb();
         await sock.sendMessage(jid, {
             text: `👑 تم تعيين @${target} كامبراطور.\n✅ جميع الصلاحيات مفتوحة له.`,
-            mentions: mentioned
+            mentions: [fixMentionJid(target)]
         }, { quoted: msg });
         return true;
     }
 
-    // .ازالة امبراطور @user
+    // .ازالة امبراطور
     if (text.startsWith(".ازالة امبراطور ") || text.startsWith(".إزالة امبراطور ")) {
         if (!owner) {
             await sock.sendMessage(jid, { text: "⛔ هذا الأمر للمطور فقط." }, { quoted: msg });
@@ -685,7 +777,7 @@ async function handleSpecialCommands(sock, jid, msg, text, db, saveDb, cleanSend
         saveDb();
         await sock.sendMessage(jid, {
             text: `✅ تم إزالة @${target} من قائمة الأباطرة.`,
-            mentions: mentioned
+            mentions: [fixMentionJid(target)]
         }, { quoted: msg });
         return true;
     }
@@ -1060,7 +1152,7 @@ async function handleListResponse(sock, jid, msg, db, cleanSender, owner) {
 }
 
 // ============================================================
-// On Message Handler
+// On Message Handler (مع كشف الأمر داخل الرسالة)
 // ============================================================
 
 async function onMessageHandler(sock, event, context) {
@@ -1120,7 +1212,7 @@ async function onMessageHandler(sock, event, context) {
                     const h = await handleSpecialCommands(sock, jid, msg, text, db, saveDb, cleanSender, hasFullAccess, isGroup);
                     if (h) continue;
                 }
-                
+
                 if (text === ".مزاد" || text.startsWith(".ادفع") || text === ".مخزوني" || text.startsWith(".ارسال") || text === ".الغاء") {
                     const h = await handleMazadFlow(sock, jid, msg, text, db, saveDb, cleanSender, hasFullAccess);
                     if (h) continue;
@@ -1209,6 +1301,8 @@ module.exports = {
     handleListResponse,
     onMessageHandler,
     onGroupUpdateHandler,
+    handleCleanCommand,
+    extractCommand,
     stopWatchdog,
     stopAutoSave
 };
