@@ -260,27 +260,15 @@ async function handleEmergencyStop(sock, jid, msg, owner) {
     globalGameBlockUntil = Date.now() + 15 * 60 * 1000;
     stopAllGames();
     stopAllCasinos();
-    for (const j of Object.keys(activeSaraha || {})) {
-        try { stopSarahaGame(j); } catch (e) {}
-    }
-    for (const j of Object.keys(activeColors || {})) {
-        try { stopColorsGame(j); } catch (e) {}
-    }
-    for (const j of Object.keys(activeAnimals || {})) {
-        try { stopAnimalsGame(j); } catch (e) {}
-    }
-    for (const j of Object.keys(activeMazads || {})) {
-        try { activeMazads[j]?.stopMazad?.(); } catch (e) {}
-    }
+    for (const j of Object.keys(activeSaraha || {})) { try { stopSarahaGame(j); } catch (e) {} }
+    for (const j of Object.keys(activeColors || {})) { try { stopColorsGame(j); } catch (e) {} }
+    for (const j of Object.keys(activeAnimals || {})) { try { stopAnimalsGame(j); } catch (e) {} }
+    for (const j of Object.keys(activeMazads || {})) { try { activeMazads[j]?.stopMazad?.(); } catch (e) {} }
     if (tahminModule && tahminModule.activeTahmin) {
-        for (const j of Object.keys(tahminModule.activeTahmin)) {
-            try { tahminModule.stopTahminGame(j); } catch (e) {}
-        }
+        for (const j of Object.keys(tahminModule.activeTahmin)) { try { tahminModule.stopTahminGame(j); } catch (e) {} }
     }
     if (guessModule && guessModule.activeGuess) {
-        for (const j of Object.keys(guessModule.activeGuess)) {
-            try { guessModule.stopGuessGame(j); } catch (e) {}
-        }
+        for (const j of Object.keys(guessModule.activeGuess)) { try { guessModule.stopGuessGame(j); } catch (e) {} }
     }
     return true;
 }
@@ -300,15 +288,15 @@ async function handleGamesList(sock, jid, msg, senderNumber) {
     const headerText = "_*❆━━═⏣⊰🎮⊱⏣═━━❆*_\n  `رجاءاً قم بتحديد الفعالية:`\n_*❆━━═⏣⊰🎰⊱⏣═━━❆*_";
 
     const rows = [
-        { id: "game_تخمين", title: "⏣⊰ تخـ🎯ــمين ⊱⏣", description: ".تخمين" },
-        { id: "game_الحيوانات", title: "⏣⊰ الـحـ🦊ـيوانات ⊱⏣", description: ".الحيوانات" },
-        { id: "game_كتابة", title: "⏣⊰ كــتــ✍️ــابـة ⊱⏣", description: ".كتابة" },
-        { id: "game_تفكيك", title: "⏣⊰ تفكـ🧩ـــيك ⊱⏣", description: ".تفكيك" },
-        { id: "game_الوان", title: "⏣⊰ ألــــ🎨ـــوان ⊱⏣", description: ".الوان" },
-        { id: "game_ايموجي", title: "⏣⊰ إيمـــ😀ــوجي ⊱⏣", description: ".ايموجي" },
-        { id: "game_اعلام", title: "⏣⊰ أعـــ🚩ــلام ⊱⏣", description: ".اعلام" },
-        { id: "game_روليت", title: "❆━═🎲 روليت 🎰═━❆", description: ".روليت" },
-        { id: "game_اتبع حدسك", title: "⏣⊰ اتـبـع حـدسـك ⊱⏣", description: ".اتبع حدسك" }
+        { id: "game_تخمين", title: "تخمين", description: ".تخمين" },
+        { id: "game_الحيوانات", title: "الحيوانات", description: ".الحيوانات" },
+        { id: "game_كتابة", title: "كتابة", description: ".كتابة" },
+        { id: "game_تفكيك", title: "تفكيك", description: ".تفكيك" },
+        { id: "game_الوان", title: "الوان", description: ".الوان" },
+        { id: "game_ايموجي", title: "ايموجي", description: ".ايموجي" },
+        { id: "game_اعلام", title: "اعلام", description: ".اعلام" },
+        { id: "game_روليت", title: "روليت", description: ".روليت" },
+        { id: "game_اتبع حدسك", title: "اتبع حدسك", description: ".اتبع حدسك" }
     ];
 
     try {
@@ -346,7 +334,7 @@ async function handleGamesList(sock, jid, msg, senderNumber) {
         console.error("❌ List Message failed:", e2?.message);
     }
 
-    const fallback = headerText + "\n\n" + rows.map(r => `${r.title}\n${r.description}`).join("\n");
+    const fallback = headerText + "\n\n" + rows.map(r => `${r.title} - ${r.description}`).join("\n");
     await sendText(sock, jid, fallback, msg);
 
     return true;
@@ -537,25 +525,14 @@ async function handleFriendRelation(sock, jid, msg, parts, senderNumber, owner, 
     }
     const u1 = findUserByNicknameForFriend(db, n1);
     const u2 = findUserByNicknameForFriend(db, n2);
-    if (!u1) {
-        await sendText(sock, jid, "❌ لم يتم العثور على اللقب: [" + n1 + "]", msg);
-        return true;
-    }
-    if (!u2) {
-        await sendText(sock, jid, "❌ لم يتم العثور على اللقب: [" + n2 + "]", msg);
-        return true;
-    }
-    if (u1.number === u2.number) {
-        await sendText(sock, jid, "⚠️ لا يمكن ربط الشخص بنفسه.", msg);
-        return true;
-    }
+    if (!u1) { await sendText(sock, jid, "❌ لم يتم العثور على اللقب: [" + n1 + "]", msg); return true; }
+    if (!u2) { await sendText(sock, jid, "❌ لم يتم العثور على اللقب: [" + n2 + "]", msg); return true; }
+    if (u1.number === u2.number) { await sendText(sock, jid, "⚠️ لا يمكن ربط الشخص بنفسه.", msg); return true; }
     const uu1 = ensureUser(db, u1.number), uu2 = ensureUser(db, u2.number);
     uu1.friend = n2;
     uu2.friend = n1;
     saveDb();
-    try {
-        await sock.sendMessage(jid, { delete: msg.key });
-    } catch (e) {}
+    try { await sock.sendMessage(jid, { delete: msg.key }); } catch (e) {}
     await sendText(sock, jid, "✅ تم تحديث العلاقة بنجاح.", msg);
     return true;
 }
@@ -575,16 +552,10 @@ async function handleMyDetails(sock, jid, msg, senderNumber, db) {
 
 async function handleUserDetails(sock, jid, msg, db) {
     const mentioned = getMentionedJid(msg);
-    if (!mentioned) {
-        await sendText(sock, jid, "⚠️ يرجى منشن الشخص.", msg);
-        return true;
-    }
+    if (!mentioned) { await sendText(sock, jid, "⚠️ يرجى منشن الشخص.", msg); return true; }
     const target = cleanNumber(mentioned);
     const user = getUser(db, target);
-    if (!user) {
-        await sendText(sock, jid, "❌ العضو ليس لديه ملف.", msg);
-        return true;
-    }
+    if (!user) { await sendText(sock, jid, "❌ العضو ليس لديه ملف.", msg); return true; }
     const dn = String(user.nickname || "").trim() || "غير مسجل";
     const fn = String(user.friend || "").trim() || "لا يوجد";
     const text = "╗═════『 بيانات العضو 』═════╔\n\n👤 العضو: @" + target + "\n💰 رصـــيـــــــده:     `{" + (user.balance || 0) + "}`\n\n🏷️ لقبه:    `{" + dn + "}`\n\n🎖️ رتبته:   `{" + (user.rank || "عضو") + "}`\n\n📈 أعلى تفاعل له: `{" + (user.maxInteraction || 0) + "}`\n\n🫂 صـــديق:  `{" + fn + "}`\n╝════════════════════╚";
@@ -597,21 +568,12 @@ async function handleUserDetails(sock, jid, msg, db) {
 // ============================================================
 
 async function handleRank(sock, jid, msg, parts, senderNumber, owner, db) {
-    if (!hasPermission(senderNumber, "3", owner)) {
-        await sendText(sock, jid, "❌ ليس لديك صلاحية.", msg);
-        return true;
-    }
+    if (!hasPermission(senderNumber, "3", owner)) { await sendText(sock, jid, "❌ ليس لديك صلاحية.", msg); return true; }
     const mentioned = getMentionedJid(msg);
-    if (!mentioned) {
-        await sendText(sock, jid, "⚠️ يرجى منشن الشخص وكتابة الرتبة.", msg);
-        return true;
-    }
+    if (!mentioned) { await sendText(sock, jid, "⚠️ يرجى منشن الشخص وكتابة الرتبة.", msg); return true; }
     const target = cleanNumber(mentioned);
     const rank = parts.slice(1).join(" ").trim();
-    if (!rank) {
-        await sendText(sock, jid, "⚠️ اكتب الرتبة.", msg);
-        return true;
-    }
+    if (!rank) { await sendText(sock, jid, "⚠️ اكتب الرتبة.", msg); return true; }
     const user = ensureUser(db, target);
     user.rank = rank;
     saveDb();
@@ -624,21 +586,12 @@ async function handleRank(sock, jid, msg, parts, senderNumber, owner, db) {
 // ============================================================
 
 async function handleInteraction(sock, jid, msg, parts, senderNumber, owner, db) {
-    if (!hasPermission(senderNumber, "4", owner)) {
-        await sendText(sock, jid, "❌ ليس لديك صلاحية.", msg);
-        return true;
-    }
+    if (!hasPermission(senderNumber, "4", owner)) { await sendText(sock, jid, "❌ ليس لديك صلاحية.", msg); return true; }
     const mentioned = getMentionedJid(msg);
-    if (!mentioned) {
-        await sendText(sock, jid, "⚠️ يرجى منشن الشخص وكتابة الرقم.", msg);
-        return true;
-    }
+    if (!mentioned) { await sendText(sock, jid, "⚠️ يرجى منشن الشخص وكتابة الرقم.", msg); return true; }
     const target = cleanNumber(mentioned);
     const amount = parsePositiveInteger(parts[parts.length - 1]);
-    if (!amount) {
-        await sendText(sock, jid, "⚠️ رقم تفاعل غير صحيح.", msg);
-        return true;
-    }
+    if (!amount) { await sendText(sock, jid, "⚠️ رقم تفاعل غير صحيح.", msg); return true; }
     const user = ensureUser(db, target);
     user.maxInteraction = amount;
     saveDb();
@@ -651,26 +604,14 @@ async function handleInteraction(sock, jid, msg, parts, senderNumber, owner, db)
 // ============================================================
 
 async function handleDeposit(sock, jid, msg, parts, senderNumber, owner, db) {
-    if (!hasPermission(senderNumber, "1", owner)) {
-        await sendText(sock, jid, "❌ ليس لديك صلاحية.", msg);
-        return true;
-    }
+    if (!hasPermission(senderNumber, "1", owner)) { await sendText(sock, jid, "❌ ليس لديك صلاحية.", msg); return true; }
     const mentioned = getMentionedJid(msg);
-    if (!mentioned) {
-        await sendText(sock, jid, "⚠️ يرجى منشن الشخص والمبلغ.", msg);
-        return true;
-    }
+    if (!mentioned) { await sendText(sock, jid, "⚠️ يرجى منشن الشخص والمبلغ.", msg); return true; }
     const target = cleanNumber(mentioned);
     const amount = parsePositiveInteger(parts[parts.length - 1]);
-    if (!amount) {
-        await sendText(sock, jid, "⚠️ مبلغ غير صحيح.", msg);
-        return true;
-    }
+    if (!amount) { await sendText(sock, jid, "⚠️ مبلغ غير صحيح.", msg); return true; }
     const user = getUser(db, target);
-    if (!user || !String(user.nickname || "").trim()) {
-        await sendText(sock, jid, "❌ اللقب غير مسجل.", msg);
-        return true;
-    }
+    if (!user || !String(user.nickname || "").trim()) { await sendText(sock, jid, "❌ اللقب غير مسجل.", msg); return true; }
     user.balance = Number(user.balance || 0) + amount;
     saveDb();
     await sendText(sock, jid, "✅ 『 تم الإيداع 』✅\n\nتم إيداع: `" + amount + "` عملة في البنك للعضو الملقب بـ: [" + user.nickname + "]", msg);
@@ -690,29 +631,14 @@ async function handleTransfer(sock, jid, msg, parts, senderNumber, db) {
     if (parts[0] && (parts[0].toLowerCase() === "الى" || parts[0].toLowerCase() === "الي")) {
         const amount = parsePositiveInteger(parts[parts.length - 1]);
         const targetNickname = parts.slice(1, -1).join(" ").trim();
-        if (!targetNickname || !amount) {
-            await sendText(sock, jid, "⚠️ الاستخدام: .تحويل الى لقب العضو المبلغ", msg);
-            return true;
-        }
+        if (!targetNickname || !amount) { await sendText(sock, jid, "⚠️ الاستخدام: .تحويل الى لقب العضو المبلغ", msg); return true; }
         const su = getUser(db, senderNumber);
-        if (!su || !String(su.nickname || "").trim()) {
-            await sendText(sock, jid, "❌ يجب تسجيل لقبك.", msg);
-            return true;
-        }
+        if (!su || !String(su.nickname || "").trim()) { await sendText(sock, jid, "❌ يجب تسجيل لقبك.", msg); return true; }
         const sb = Number(su.balance || 0);
-        if (sb < amount) {
-            await sendText(sock, jid, "╗════════⛔════════╔\n     لا تملك رصيد كافي للتحويل\n\n   رصيدك الحالي: `" + sb + "$`\n\n╝════════🚫════╚", msg);
-            return true;
-        }
+        if (sb < amount) { await sendText(sock, jid, "╗════════⛔════════╔\n     لا تملك رصيد كافي للتحويل\n\n   رصيدك الحالي: `" + sb + "$`\n\n╝════════🚫════╚", msg); return true; }
         const found = findUserByNickname(db, targetNickname);
-        if (!found) {
-            await sendText(sock, jid, "❌ لم يتم العثور على اللقب: [" + targetNickname + "]", msg);
-            return true;
-        }
-        if (found.number === senderNumber) {
-            await sendText(sock, jid, "⚠️ لا يمكنك التحويل لنفسك.", msg);
-            return true;
-        }
+        if (!found) { await sendText(sock, jid, "❌ لم يتم العثور على اللقب: [" + targetNickname + "]", msg); return true; }
+        if (found.number === senderNumber) { await sendText(sock, jid, "⚠️ لا يمكنك التحويل لنفسك.", msg); return true; }
         su.balance = sb - amount;
         found.user.balance = Number(found.user.balance || 0) + amount;
         saveDb();
@@ -737,10 +663,7 @@ async function handleTransfer(sock, jid, msg, parts, senderNumber, db) {
 
 async function handleDailyReward(sock, jid, msg, senderNumber, db, saveDb) {
     const user = getUser(db, senderNumber);
-    if (!user || !String(user.nickname || "").trim()) {
-        await sendText(sock, jid, getNoNicknameMessage(), msg);
-        return true;
-    }
+    if (!user || !String(user.nickname || "").trim()) { await sendText(sock, jid, getNoNicknameMessage(), msg); return true; }
     const now = Date.now();
     const cd = 12 * 60 * 60 * 1000;
     db.dailyData = db.dailyData || {};
@@ -773,15 +696,9 @@ async function handleDailyReward(sock, jid, msg, senderNumber, db, saveDb) {
 // ============================================================
 
 async function handleGrantPermission(sock, jid, msg, parts, senderNumber, owner, db, saveDb) {
-    if (!owner) {
-        await sendText(sock, jid, "⚠️ هذا الأمر للمطور فقط.", msg);
-        return true;
-    }
+    if (!owner) { await sendText(sock, jid, "⚠️ هذا الأمر للمطور فقط.", msg); return true; }
     const mentioned = getMentionedJid(msg);
-    if (!mentioned) {
-        await sendText(sock, jid, "⚠️ يرجى منشن الشخص.", msg);
-        return true;
-    }
+    if (!mentioned) { await sendText(sock, jid, "⚠️ يرجى منشن الشخص.", msg); return true; }
     const target = cleanNumber(mentioned);
     db.chainPermissions = db.chainPermissions || [];
     if (!db.chainPermissions.includes(target)) {
@@ -805,16 +722,10 @@ async function handleChainEdit(sock, jid, msg, parts, senderNumber, owner, db, s
         return true;
     }
     const mentioned = getMentionedJid(msg);
-    if (!mentioned) {
-        await sendText(sock, jid, "⚠️ يرجى منشن الشخص وكتابة الأيام.", msg);
-        return true;
-    }
+    if (!mentioned) { await sendText(sock, jid, "⚠️ يرجى منشن الشخص وكتابة الأيام.", msg); return true; }
     const target = cleanNumber(mentioned);
     const dc = parsePositiveInteger(parts[parts.length - 1]);
-    if (!dc || dc < 1 || dc > 30) {
-        await sendText(sock, jid, "⚠️ عدد أيام غير صحيح (1-30).", msg);
-        return true;
-    }
+    if (!dc || dc < 1 || dc > 30) { await sendText(sock, jid, "⚠️ عدد أيام غير صحيح (1-30).", msg); return true; }
     db.dailyData = db.dailyData || {};
     if (!db.dailyData[target]) db.dailyData[target] = { day: 0, lastClaim: 0 };
     db.dailyData[target].day = dc;
@@ -838,32 +749,20 @@ async function handleRouletteBet(sock, jid, msg, parts, senderNumber, db) {
         return true;
     }
     const user = getUser(db, senderNumber);
-    if (!user || !String(user.nickname || "").trim()) {
-        await sendText(sock, jid, "❌ يجب تسجيل لقبك أولاً.", msg);
-        return true;
-    }
+    if (!user || !String(user.nickname || "").trim()) { await sendText(sock, jid, "❌ يجب تسجيل لقبك أولاً.", msg); return true; }
     const amount = parsePositiveInteger(parts[0]);
-    if (!amount) {
-        await sendText(sock, jid, "⚠️ مبلغ غير صحيح.", msg);
-        return true;
-    }
+    if (!amount) { await sendText(sock, jid, "⚠️ مبلغ غير صحيح.", msg); return true; }
     const balance = Number(user.balance || 0);
     if (balance < amount) {
         await sendText(sock, jid, "╗════════⛔════════╔\n     لا تملك رصيد كافي للرهان\n\n   رصيدك الحالي: `" + balance + "$`\n\n╝════════🚫════╚", msg);
         return true;
     }
     const players = Object.keys(casino.bets || {});
-    if (players.length >= 8) {
-        await sendText(sock, jid, "⚠️ اكتمل العدد الأقصى (8 مقاعد).", msg);
-        return true;
-    }
+    if (players.length >= 8) { await sendText(sock, jid, "⚠️ اكتمل العدد الأقصى (8 مقاعد).", msg); return true; }
     const fp = players[0];
     if (fp) {
         const fa = Number(casino.bets[fp]?.amount) || 0;
-        if (amount < fa) {
-            await sendText(sock, jid, "⚠️ يجب أن يكون الرهان ≥ " + fa + "$", msg);
-            return true;
-        }
+        if (amount < fa) { await sendText(sock, jid, "⚠️ يجب أن يكون الرهان ≥ " + fa + "$", msg); return true; }
     }
     casino.bets = casino.bets || {};
     casino.bets[senderNumber] = { nickname: user.nickname, amount, lives: 3, jid: userMention(senderNumber) };
@@ -876,10 +775,7 @@ async function handleRouletteBet(sock, jid, msg, parts, senderNumber, db) {
 // ============================================================
 
 async function handleGamePause(sock, jid, msg, senderNumber, owner, db) {
-    if (!(owner || hasPermission(senderNumber, "1", owner))) {
-        await sendText(sock, jid, "⚠️ ليس لديك صلاحية.", msg);
-        return true;
-    }
+    if (!(owner || hasPermission(senderNumber, "1", owner))) { await sendText(sock, jid, "⚠️ ليس لديك صلاحية.", msg); return true; }
     const game = activeGames[jid];
     if (game && !game.gameEnded) {
         game.gameEnded = true;
@@ -900,15 +796,10 @@ async function handleGameResume(sock, jid, msg, senderNumber, owner) {
         if (typeof game.sendNewChallenge === "function") {
             await sendText(sock, jid, "▶️ تم استئناف الفعالية!", msg);
             await game.sendNewChallenge();
-        } else {
-            await sendText(sock, jid, "⚠️ لا يمكن الاستئناف.", msg);
-        }
+        } else { await sendText(sock, jid, "⚠️ لا يمكن الاستئناف.", msg); }
         return true;
     }
-    if (game && !game.gameEnded) {
-        await sendText(sock, jid, "⚠️ الفعالية تعمل بالفعل.", msg);
-        return true;
-    }
+    if (game && !game.gameEnded) { await sendText(sock, jid, "⚠️ الفعالية تعمل بالفعل.", msg); return true; }
     await sendText(sock, jid, "⚠️ لا توجد فعالية متوقفة.", msg);
     return true;
 }
@@ -919,25 +810,17 @@ async function handleGameResume(sock, jid, msg, senderNumber, owner) {
 
 async function handleStopAllGames(sock, jid, msg, senderNumber, owner, db) {
     db.gamePermissions = Array.isArray(db.gamePermissions) ? db.gamePermissions : [];
-    if (!(owner || db.gamePermissions.includes(senderNumber))) {
-        await sendText(sock, jid, "⚠️ ليس لديك صلاحية.", msg);
-        return true;
-    }
-    stopAllGames();
-    stopAllCasinos();
+    if (!(owner || db.gamePermissions.includes(senderNumber))) { await sendText(sock, jid, "⚠️ ليس لديك صلاحية.", msg); return true; }
+    stopAllGames(); stopAllCasinos();
     for (const j of Object.keys(activeSaraha || {})) { try { stopSarahaGame(j); } catch (e) {} }
     for (const j of Object.keys(activeColors || {})) { try { stopColorsGame(j); } catch (e) {} }
     for (const j of Object.keys(activeAnimals || {})) { try { stopAnimalsGame(j); } catch (e) {} }
     for (const j of Object.keys(activeMazads || {})) { try { activeMazads[j]?.stopMazad?.(); } catch (e) {} }
     if (tahminModule && tahminModule.activeTahmin) {
-        for (const j of Object.keys(tahminModule.activeTahmin)) {
-            try { tahminModule.stopTahminGame(j); } catch (e) {}
-        }
+        for (const j of Object.keys(tahminModule.activeTahmin)) { try { tahminModule.stopTahminGame(j); } catch (e) {} }
     }
     if (guessModule && guessModule.activeGuess) {
-        for (const j of Object.keys(guessModule.activeGuess)) {
-            try { guessModule.stopGuessGame(j); } catch (e) {}
-        }
+        for (const j of Object.keys(guessModule.activeGuess)) { try { guessModule.stopGuessGame(j); } catch (e) {} }
     }
     try {
         for (const k of Object.keys(activeGames)) delete activeGames[k];
@@ -953,25 +836,18 @@ async function handleStopAllGames(sock, jid, msg, senderNumber, owner, db) {
 
 async function handleReplies(sock, jid, msg, parts, senderNumber, owner, db, saveDb) {
     db.gamePermissions = Array.isArray(db.gamePermissions) ? db.gamePermissions : [];
-    if (!(owner || db.gamePermissions.includes(senderNumber))) {
-        await sendText(sock, jid, "⚠️ ليس لديك صلاحية.", msg);
-        return true;
-    }
+    if (!(owner || db.gamePermissions.includes(senderNumber))) { await sendText(sock, jid, "⚠️ ليس لديك صلاحية.", msg); return true; }
     const action = String(parts[0] || "").toLowerCase();
     db.repliesEnabled = db.repliesEnabled || {};
     if (action === "on") {
-        db.repliesEnabled[jid] = true;
-        saveDb();
+        db.repliesEnabled[jid] = true; saveDb();
         try { await sock.sendMessage(jid, { delete: msg.key }); } catch (e) {}
         await sendText(sock, jid, "✅ تم تشغيل الردود.", msg);
     } else if (action === "off") {
-        delete db.repliesEnabled[jid];
-        saveDb();
+        delete db.repliesEnabled[jid]; saveDb();
         try { await sock.sendMessage(jid, { delete: msg.key }); } catch (e) {}
         await sendText(sock, jid, "✅ تم إيقاف الردود.", msg);
-    } else {
-        await sendText(sock, jid, "⚠️ الاستخدام: .ردود on/off", msg);
-    }
+    } else { await sendText(sock, jid, "⚠️ الاستخدام: .ردود on/off", msg); }
     return true;
 }
 
@@ -981,25 +857,18 @@ async function handleReplies(sock, jid, msg, parts, senderNumber, owner, db, sav
 
 async function handleAha(sock, jid, msg, parts, senderNumber, owner, db, saveDb) {
     db.gamePermissions = Array.isArray(db.gamePermissions) ? db.gamePermissions : [];
-    if (!(owner || db.gamePermissions.includes(senderNumber))) {
-        await sendText(sock, jid, "⚠️ ليس لديك صلاحية.", msg);
-        return true;
-    }
+    if (!(owner || db.gamePermissions.includes(senderNumber))) { await sendText(sock, jid, "⚠️ ليس لديك صلاحية.", msg); return true; }
     const action = String(parts[0] || "").toLowerCase();
     db.ahaEnabled = db.ahaEnabled || {};
     if (action === "on") {
-        db.ahaEnabled[jid] = true;
-        saveDb();
+        db.ahaEnabled[jid] = true; saveDb();
         try { await sock.sendMessage(jid, { delete: msg.key }); } catch (e) {}
         await sendText(sock, jid, "✅ تم تشغيل أمر احا.", msg);
     } else if (action === "off") {
-        delete db.ahaEnabled[jid];
-        saveDb();
+        delete db.ahaEnabled[jid]; saveDb();
         try { await sock.sendMessage(jid, { delete: msg.key }); } catch (e) {}
         await sendText(sock, jid, "✅ تم إيقاف أمر احا.", msg);
-    } else {
-        await sendText(sock, jid, "⚠️ الاستخدام: .احا on/off", msg);
-    }
+    } else { await sendText(sock, jid, "⚠️ الاستخدام: .احا on/off", msg); }
     return true;
 }
 
@@ -1009,10 +878,7 @@ async function handleAha(sock, jid, msg, parts, senderNumber, owner, db, saveDb)
 
 async function handleQuiet(sock, jid, msg, parts, senderNumber, owner, db, saveDb) {
     db.gamePermissions = Array.isArray(db.gamePermissions) ? db.gamePermissions : [];
-    if (!(owner || db.gamePermissions.includes(senderNumber))) {
-        await sendText(sock, jid, "⚠️ ليس لديك صلاحية.", msg);
-        return true;
-    }
+    if (!(owner || db.gamePermissions.includes(senderNumber))) { await sendText(sock, jid, "⚠️ ليس لديك صلاحية.", msg); return true; }
     const action = String(parts[0] || "").toLowerCase();
     db.quietEnabled = db.quietEnabled || {};
     if (action === "on") {
@@ -1027,9 +893,7 @@ async function handleQuiet(sock, jid, msg, parts, senderNumber, owner, db, saveD
             const el = now - timer.lastMessageTime;
             if (el > 10 * 60 * 1000 && !timer.sent) {
                 timer.sent = true;
-                try {
-                    await sock.sendMessage(jid, { text: "😶‍🌫️══════════════😶‍🌫️\nعمّ الهدوء في قروب المغوليين\n😶‍🌫️══════════════😶‍🌫️" });
-                } catch (e) {}
+                try { await sock.sendMessage(jid, { text: "😶‍🌫️══════════════😶‍🌫️\nعمّ الهدوء في قروب المغوليين\n😶‍🌫️══════════════😶‍🌫️" }); } catch (e) {}
             }
             const ce = now - timer.lastMessageTime;
             if (ce < 10 * 60 * 1000 && timer.sent) timer.sent = false;
@@ -1044,9 +908,7 @@ async function handleQuiet(sock, jid, msg, parts, senderNumber, owner, db, saveD
         saveDb();
         try { await sock.sendMessage(jid, { delete: msg.key }); } catch (e) {}
         await sendText(sock, jid, "✅ تم إيقاف وضع الهدوء.", msg);
-    } else {
-        await sendText(sock, jid, "⚠️ الاستخدام: .هدوء on/off", msg);
-    }
+    } else { await sendText(sock, jid, "⚠️ الاستخدام: .هدوء on/off", msg); }
     return true;
 }
 
@@ -1094,10 +956,17 @@ async function handleCommand(sock, jid, msg, context = {}) {
         if (isGameCommand(command) && !await checkGameContext(sock, jid, msg, group)) return true;
     }
 
-    const adminCommands = new Set(["سماح", "صلاحيات", "بوت", "اشرافه", "اشراف", "استقبال", "ورك", "work", "طرف", "سحب"]);
+    // ✅ الأوامر الإدارية - الآن مع try/catch للكشف عن الأخطاء
+    const adminCommands = new Set(["سماح", "صلاحيات", "بوت", "اشرافه", "اشراف", "استقبال", "ورك", "work", "طرف", "سحب", "تنظيم"]);
     if (adminCommands.has(command)) {
-        const handled = await handleAdminCommand(sock, jid, msg, command, parts, senderNumber, sender, db, saveDb, owner, group, (u, l) => hasPermission(u, l, owner));
-        return handled !== false;
+        try {
+            const handled = await handleAdminCommand(sock, jid, msg, command, parts, senderNumber, sender, db, saveDb, owner, group, (u, l) => hasPermission(u, l, owner));
+            return handled !== false;
+        } catch (e) {
+            console.error("❌ خطأ في handleAdminCommand:", e?.message, e?.stack);
+            await sendText(sock, jid, `❌ حدث خطأ: ${e?.message || 'غير معروف'}`, msg);
+            return true;
+        }
     }
 
     // .ads
@@ -1215,14 +1084,8 @@ async function handleCommand(sock, jid, msg, context = {}) {
 
     // الكازينو
     if (command === "كازينو") return handleCasinoMenu(sock, jid, msg);
-    if (command === "روليت") {
-        await startRoulette(sock, jid, msg, senderNumber, sender, db, saveDb, owner);
-        return true;
-    }
-    if (command === "الكرستال" || command === "كريستال") {
-        await startCrystal(sock, jid, msg, senderNumber, sender, db, saveDb, owner, parts);
-        return true;
-    }
+    if (command === "روليت") { await startRoulette(sock, jid, msg, senderNumber, sender, db, saveDb, owner); return true; }
+    if (command === "الكرستال" || command === "كريستال") { await startCrystal(sock, jid, msg, senderNumber, sender, db, saveDb, owner, parts); return true; }
     if (command === "رهان") return handleRouletteBet(sock, jid, msg, parts, senderNumber, db);
     if (command === "بدأ" || command === "بدأ_الرهان" || command === "بدل_الرهان") {
         if (command === "بدأ" && parts[0]?.toLowerCase() !== "الرهان" && !activeCasinos[jid]) return false;
@@ -1230,14 +1093,8 @@ async function handleCommand(sock, jid, msg, context = {}) {
     }
     if (command === "انسحاب") {
         const casino = activeCasinos[jid];
-        if (!casino) {
-            await sendText(sock, jid, "⚠️ لا يوجد كازينو نشط.", msg);
-            return true;
-        }
-        if (casino.creator !== senderNumber && !owner) {
-            await sendText(sock, jid, "⚠️ منشئ الفعالية فقط.", msg);
-            return true;
-        }
+        if (!casino) { await sendText(sock, jid, "⚠️ لا يوجد كازينو نشط.", msg); return true; }
+        if (casino.creator !== senderNumber && !owner) { await sendText(sock, jid, "⚠️ منشئ الفعالية فقط.", msg); return true; }
         try { casino.stopGame?.(); } catch (e) {}
         delete activeCasinos[jid];
         await sendText(sock, jid, "🚫 تم إلغاء فعالية الكازينو.", msg);
