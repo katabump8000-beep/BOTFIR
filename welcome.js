@@ -1,7 +1,7 @@
 // ============================================================
 // welcome.js
 // ALJESAT BOT
-// نظام رسالة الترحيب مع الصورة والروابط
+// نظام رسالة الترحيب مع الصورة والروابط (معدل)
 // ============================================================
 
 "use strict";
@@ -72,13 +72,9 @@ _*آلَمِــــنـــــشــــن:*_  ┊ ${mention} ┊
 ╯──────────────╰`;
 }
 
-// ============================================================
-// إرسال رسالة الترحيب مع الصورة (محسّن للمنشن)
-// ============================================================
-
 async function sendWelcome(sock, jid, userNumber, photoEntry, db) {
     try {
-        if (!sock || !jid || !userNumber) {
+        if (!sock || !jid || !userNumber || !photoEntry) {
             console.warn("⚠️ sendWelcome: بيانات ناقصة");
             return false;
         }
@@ -86,7 +82,7 @@ async function sendWelcome(sock, jid, userNumber, photoEntry, db) {
         const cleanNum = cleanNumber(userNumber);
         const mentionJid = safeMentionJid(cleanNum);
 
-        let nickname = photoEntry?.nickname;
+        let nickname = photoEntry.nickname;
         if (!nickname || !String(nickname).trim()) {
             const user = db && db.users ? db.users[cleanNum] : null;
             nickname = user?.nickname || "";
@@ -94,7 +90,7 @@ async function sendWelcome(sock, jid, userNumber, photoEntry, db) {
 
         const welcomeText = getWelcomeMessage(nickname, cleanNum, db);
 
-        const filePath = photoEntry?.filePath;
+        const filePath = photoEntry.filePath;
         const fileExists = filePath && fs.existsSync(filePath);
 
         if (fileExists) {
@@ -105,10 +101,10 @@ async function sendWelcome(sock, jid, userNumber, photoEntry, db) {
                     caption: welcomeText,
                     mentions: [mentionJid]
                 });
-                console.log(`✅ ترحيب بالصورة للعضو ${cleanNum}`);
+                console.log(`✅ تم إرسال ترحيب بالصورة للعضو ${cleanNum}`);
                 return true;
             } catch (err) {
-                console.error("❌ فشل إرسال الصورة:", err?.message);
+                console.error("❌ فشل إرسال الصورة في الترحيب:", err?.message);
                 await sock.sendMessage(jid, {
                     text: welcomeText,
                     mentions: [mentionJid]
@@ -122,7 +118,7 @@ async function sendWelcome(sock, jid, userNumber, photoEntry, db) {
             mentions: [mentionJid]
         }).catch(() => {});
 
-        console.log(`✅ ترحيب نصي للعضو ${cleanNum}`);
+        console.log(`✅ تم إرسال ترحيب نصي للعضو ${cleanNum}`);
         return true;
 
     } catch (error) {
@@ -153,10 +149,6 @@ async function sendWelcomeTextOnly(sock, jid, userNumber, nickname, db) {
 function getWelcomeText(nickname, userNumber, db) {
     return getWelcomeMessage(nickname, userNumber, db);
 }
-
-// ============================================================
-// تصدير
-// ============================================================
 
 module.exports = {
     sendWelcome,
