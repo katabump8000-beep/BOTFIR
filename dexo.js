@@ -1,6 +1,6 @@
 // ============================================================
 // dexo.js
-// ALJESAT BOT - كل المنطق والمعالجات (نسخة محدثة)
+// ALJESAT BOT - كل المنطق والمعالجات (نسخة نهائية)
 // ============================================================
 
 "use strict";
@@ -168,7 +168,7 @@ function setupAdminMonitoring(sock) {
 }
 
 // ============================================================
-// كشف الأمر داخل الرسالة
+// كشف الأمر داخل الرسالة (محسّن)
 // ============================================================
 
 const KNOWN_COMMANDS = [
@@ -176,25 +176,28 @@ const KNOWN_COMMANDS = [
     "ايموجي", "روليت", "كريستال", "الكرستال", "صراحة", "كازينو",
     "العاب", "اتبع حدسك", "مزاد", "تفاصيلي", "تفاصيله", "رصيد",
     "هدية", "القاب", "اوامر", "نتائج", "مخزوني", "متجر", "شراء",
-    "من", "وقف", "كمل", "ايقاف", "استراحة", "الاباطرة"
+    "وقف", "كمل", "ايقاف", "استراحة", "الاباطرة", "من"
 ];
 
 function extractCommand(text) {
     if (!text) return null;
-    const str = String(text);
+    const str = String(text).trim();
 
-    // إذا الرسالة كاملة أمر
-    if (str.trim().startsWith(".")) {
-        return str.trim();
+    // إذا الرسالة كاملة أمر (تبدأ بنقطة)
+    if (str.startsWith(".")) {
+        return str;
     }
 
     // البحث عن أي أمر معروف داخل الرسالة
     for (const cmd of KNOWN_COMMANDS) {
-        const regex = new RegExp(`\\.${cmd}(?:\\s|$)`, "i");
+        const regex = new RegExp(`\\.${cmd}(?:\\s|$|[،,.!؟])`, "i");
         const match = str.match(regex);
         if (match) {
             const idx = str.indexOf(match[0]);
-            return str.slice(idx).trim();
+            const extracted = str.slice(idx).trim();
+            if (extracted.startsWith(".")) {
+                return extracted;
+            }
         }
     }
 
@@ -544,39 +547,60 @@ async function handleCleanCommand(sock, jid, msg, cleanSender, owner, isEmperor)
 
     try {
         const count = 40;
-        // جلب آخر 40 رسالة من القروب
-        // استخدام groupFetchAllParticipating أو fetchMessageHistory حسب الإصدار
-
         let deletedCount = 0;
+        let failedCount = 0;
 
-        try {
-            // محاولة استخدام fetchMessageHistory إذا متوفرة
-            if (typeof sock.fetchMessageHistory === "function") {
+        if (typeof sock.fetchMessageHistory === "function") {
+            try {
                 const history = await sock.fetchMessageHistory(count, msg.key, Math.floor(Date.now() / 1000));
-                if (Array.isArray(history)) {
+                if (Array.isArray(history) && history.length > 0) {
                     for (const m of history) {
                         if (!m?.key) continue;
                         if (m.key.id === msg.key.id) continue;
                         try {
                             await sock.sendMessage(jid, { delete: m.key });
                             deletedCount++;
-                            await new Promise(r => setTimeout(r, 300));
-                        } catch (_) {}
+                            await new Promise(r => setTimeout(r, 400));
+                        } catch (_) {
+                            failedCount++;
+                        }
                     }
                 }
+            } catch (e) {
+                console.error("fetchMessageHistory error:", e?.message);
             }
-        } catch (e) {
-            console.error("fetchMessageHistory error:", e?.message);
         }
 
-        // إذا لم تُحذف رسائل، نبلغ المستخدم
+        if (deletedCount === 0) {
+            try {
+                const store = sock.store;
+                if (store && store.messages && store.messages[jid]) {
+                    const messagesObj = store.messages[jid].array || [];
+                    const recent = messagesObj.slice(-count);
+                    for (const m of recent) {
+                        if (!m?.key) continue;
+                        if (m.key.id === msg.key.id) continue;
+                        try {
+                            await sock.sendMessage(jid, { delete: m.key });
+                            deletedCount++;
+                            await new Promise(r => setTimeout(r, 400));
+                        } catch (_) {
+                            failedCount++;
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("store.messages error:", e?.message);
+            }
+        }
+
         if (deletedCount === 0) {
             await sock.sendMessage(jid, {
-                text: `⚠️ لم يتمكن البوت من حذف الرسائل.\nتأكد من أن البوت مشرف في القروب.`
+                text: `⚠️ لم يتمكن البوت من حذف الرسائل.\nتأكد من:\n1. البوت مشرف في القروب\n2. الرسائل ليست قديمة جداً (أكثر من ساعة)\n3. القروب ليس مقفلاً`
             }, { quoted: msg });
         } else {
             await sock.sendMessage(jid, {
-                text: `🧹 تم حذف ${deletedCount} رسالة بنجاح.`
+                text: `🧹 تم حذف ${deletedCount} رسالة بنجاح.${failedCount > 0 ? `\n⚠️ فشل حذف ${failedCount}` : ''}`
             }, { quoted: msg });
         }
 
@@ -619,15 +643,10 @@ async function handleMazadFlow(sock, jid, msg, text, db, saveDb, cleanSender, ow
 // ============================================================
 
 async function handleSpecialCommands(sock, jid, msg, text, db, saveDb, cleanSender, owner, isGroup) {
-    // فحص الإمبراطور
     const isEmperor = db.emperors && db.emperors[cleanSender] === true;
-
-    // الإمبراطور = owner (تجاوز كل الصلاحيات)
     const hasFullAccess = owner || isEmperor;
 
-    // ============================================
-    // .امبراطور @user - تعيين إمبراطور
-    // ============================================
+    // .امبراطور @user
     if (text.startsWith(".امبراطور ") && !text.startsWith(".ازالة")) {
         if (!owner) {
             await sock.sendMessage(jid, { text: "⛔ هذا الأمر للمطور فقط." }, { quoted: msg });
@@ -649,9 +668,7 @@ async function handleSpecialCommands(sock, jid, msg, text, db, saveDb, cleanSend
         return true;
     }
 
-    // ============================================
     // .ازالة امبراطور @user
-    // ============================================
     if (text.startsWith(".ازالة امبراطور ") || text.startsWith(".إزالة امبراطور ")) {
         if (!owner) {
             await sock.sendMessage(jid, { text: "⛔ هذا الأمر للمطور فقط." }, { quoted: msg });
@@ -673,9 +690,7 @@ async function handleSpecialCommands(sock, jid, msg, text, db, saveDb, cleanSend
         return true;
     }
 
-    // ============================================
-    // .الاباطرة - عرض قائمة الأباطرة
-    // ============================================
+    // .الاباطرة
     if (text === ".الاباطرة" || text === ".الإباطرة") {
         db.emperors = db.emperors || {};
         const emperors = Object.keys(db.emperors).filter(k => db.emperors[k] === true);
@@ -693,23 +708,16 @@ async function handleSpecialCommands(sock, jid, msg, text, db, saveDb, cleanSend
             mentions.push(fixMentionJid(emp));
             i++;
         }
-        await sock.sendMessage(jid, {
-            text: listText,
-            mentions
-        }, { quoted: msg });
+        await sock.sendMessage(jid, { text: listText, mentions }, { quoted: msg });
         return true;
     }
 
-    // ============================================
-    // .تنظيف - حذف آخر 40 رسالة
-    // ============================================
+    // .تنظيف
     if (text === ".تنظيف" || text === ".تنضيف") {
         return handleCleanCommand(sock, jid, msg, cleanSender, owner, isEmperor);
     }
 
-    // ============================================
     // .من لقب
-    // ============================================
     if (text.startsWith(".من ")) {
         const nickname = text.slice(4).trim();
         const { findUserByNickname } = require("./commands");
@@ -1088,7 +1096,6 @@ async function onMessageHandler(sock, event, context) {
                 const originalText = getMessageTextFromMsg(msg);
                 if (!originalText) continue;
 
-                // استخراج الأمر داخل الرسالة (إذا وجد)
                 const extractedCmd = extractCommand(originalText);
                 const text = extractedCmd || originalText;
 
@@ -1113,12 +1120,12 @@ async function onMessageHandler(sock, event, context) {
                     const h = await handleSpecialCommands(sock, jid, msg, text, db, saveDb, cleanSender, hasFullAccess, isGroup);
                     if (h) continue;
                 }
-
+                
                 if (text === ".مزاد" || text.startsWith(".ادفع") || text === ".مخزوني" || text.startsWith(".ارسال") || text === ".الغاء") {
                     const h = await handleMazadFlow(sock, jid, msg, text, db, saveDb, cleanSender, hasFullAccess);
                     if (h) continue;
                 }
-                
+
                 if (text === ".صراحة" && await handleSarahaCommand(sock, jid, msg, db, saveDb, cleanSender, hasFullAccess)) continue;
                 if (text === ".الوان" && await handleColorsCommand(sock, jid, msg, db, saveDb, cleanSender, hasFullAccess)) continue;
                 if (text === ".الحيوانات" && await handleAnimalsCommand(sock, jid, msg, db, saveDb, cleanSender, hasFullAccess)) continue;
